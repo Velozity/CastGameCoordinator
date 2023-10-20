@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model Account {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  email       String   @unique
+  displayName String?
+  password    String
+  closed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  rankedWins Int @default(0)
+  // probs xp n stuff whatever
+
+  SessionQueue SessionQueue?
+  PartyMember  PartyMember[]
+  TeamAGames   Game[]        @relation(name: "TeamAGames")
+  TeamBGames   Game[]        @relation(name: "TeamBGames")
+}
+
+model SessionQueue {
+  id        String   @id @default(cuid())
+  accountId String   @unique
+  gameType  Int      @db.SmallInt
+  region    Int      @db.SmallInt
+  createdAt DateTime @default(now())
+  Party     Party?
+  Account   Account  @relation(fields: [accountId], references: [id])
+}
+
+model Party {
+  id             String        @id @default(cuid())
+  sessionQueueId String        @unique
+  members        PartyMember[]
+  SessionQueue   SessionQueue  @relation(fields: [sessionQueueId], references: [id])
+}
+
+model PartyMember {
+  partyId   String
+  accountId String  @unique
+  Party     Party   @relation(fields: [partyId], references: [id])
+  Account   Account @relation(fields: [accountId], references: [id])
+
+  @@index([partyId])
+  @@index([accountId])
+}
+
+model GameVersion {
+  id     String @id
+  Heroes Hero[]
+}
+
+// Hero "stat" JSON:
+// primaryDamageType: damage type enum (0 physical, 1 magical)
+// autoAttackDamage: num
+// class: hero class enum (0 damage, 1 tank, 2 support)
+model Hero {
+  id            String      @id
+  name          String
+  uri           String
+  description   String
+  stat          Json
+  gameVersionId String
+  Abilities     Ability[]
+  GameVersion   GameVersion @relation(fields: [gameVersionId], references: [id])
+
+  @@index([gameVersionId])
+}
+
+// Ability "stat" JSON:
+// type: num (0 targetable ability, 1 aoe ability, 2 instant ability, 3 passive)
+// uri: string
+// isOnCastbar: boolean
+// unitTargetType: num (0 player)
+// unitDamageType: num (0 physical, 1 magical)
+// hasOverpower: boolean 
+// requiredLevel: num
+// castRange: num
+// cooldown: num
+// hasDamage: boolean
+// damage: num
+// isChanneled: boolean
+// channelTime: num
+// isUltimate: boolean
+// castTime: num
+// hasCharges: boolean
+// charges: num
+// chargeRestoreTime: num (seconds)
+// dispellable: boolean
+model Ability {
+  id     String @id
+  name   String
+  stat   Json
+  heroId String
+  Hero   Hero   @relation(fields: [heroId], references: [id])
+
+  @@index([heroId])
+}
+
+// game stat json
+model Game {
+  id           String  @id @default(cuid())
+  gameType     Int
+  winningTeam  Int?
+  ongoing      Boolean @default(true)
+  stat         Json? // detailed statistics
+  gameServerId Int
+
+  createdAt    DateTime   @default(now())
+  GameServer   GameServer @relation(fields: [gameServerId], references: [id])
+  TeamAPlayers Account[]  @relation(name: "TeamAGames")
+  TeamBPlayers Account[]  @relation(name: "TeamBGames")
+
+  @@index([gameServerId])
+}
+
+model GameServer {
+  id               Int      @id @default(autoincrement())
+  connectionString String
+  region           Int
+  ready            Boolean  @default(false)
+  inUse            Boolean  @default(false)
+  lastAccessed     DateTime @updatedAt
+  Games            Game[]
+
+  @@index([region])
+}
